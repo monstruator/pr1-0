@@ -104,8 +104,8 @@ printf("proxyR=%d proxyERR=%d proxy_MODE=%d\n",
 // Принять 8 слов из КК
 	while((rezult=ou_read(dev_mmk, channel, 1)) != 0);
 	//printf("rezult ou_read = %d\n", rezult);
-//	for(i=0; i<12; i++) printf(" %x", dev_mmk->tx_B[i]);
-//	printf("\n in  - ");
+	//for(i=0; i<12; i++) printf(" %x", dev_mmk->tx_B[i]);
+	//printf("\n in  - ");
 //	for(i=0; i<3; i++) printf(" %04x", dev_mmk->tx_B[i+4]);
 
 	//normirovanie uglov
@@ -125,9 +125,11 @@ printf("proxyR=%d proxyERR=%d proxy_MODE=%d\n",
 if (dev_mmk->tx_B[4]==0) dev_mmk->tx_B[4]=0x7c7;
 //-------------------------BUP---------------------------------
 //for(i=0;i<3;i++) mass[i]=dev_mmk->tx_B[i+4]; //возвращаем коды угла назад
-
+//	printf("------------------------------------%d   %d--------\n",dev_mmk->tx_B[0+4],(3983-dev_mmk->tx_B[0+4])-210);
 for(i=0;i<3;i++)  //!!!!!
 {
+	
+	if (i==0) dev_mmk->tx_B[0+4]=(3982-dev_mmk->tx_B[0+4]); //коррекция угла
 	if (i==1) {BUP_w[1][0]=(dev_mmk->tx_B[1+4]>>7)&0x1f; BUP_w[1][1]=(dev_mmk->tx_B[1+4]>>2)&0x1f;}
 	  	 else {BUP_w[i][0]=(dev_mmk->tx_B[i+4]>>6)&0x3f; BUP_w[i][1]=(dev_mmk->tx_B[i+4])&0x3f;}
 	//mass[i]=mass[i]&0x7fff;
@@ -138,7 +140,7 @@ for(i=0;i<3;i++)  //!!!!!
 		else 	    {mass[i]=BUP_r[i][0]&0x3f;mass[i]=mass[i]<<6;mass[i]+=BUP_r[i][1]&0x3f;}
 
 		//уменьшение ошибки
-/*		if ((i==1)&&(mass_r[i]!=mass[i]))
+		if ((i==1)&&(mass_r[i]!=mass[i]))
 		{
 			mass_r[1]=mass[1];
 //			printf("mass=%d  mass_p=%d\n",mass[i],mass_w[i]);
@@ -189,7 +191,8 @@ for(i=0;i<3;i++)  //!!!!!
 			printf("%04x %04x\n",dev_mmk->tx_B[4],mass[0]);
 
 			}
-	*/
+			
+	//уменьшение ошибки
 	}
 	else {mass[i]=mass[i]|0x8000;clear_CNL(8);}
 	
@@ -324,7 +327,9 @@ if (   ((set_pr1[7]&0xFFC0) != (dev_mmk->tx_B[7]&0xFFC0))
 for(i=0; i<=11; i++) set_pr1[i]=dev_mmk->tx_B[i]; //запомним состояние упр слова
 //+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 for(i=0; i<3; i++) mass[i]=mass[i]&0xfff;
+	printf("------------------------------------%d   --------\n",mass[0]);
 
+mass[0]=(3982-mass[0]); //коррекция положения антенны
   // Передать 8 слов КК
 //    printf(" mass[5]=%x \n",mass[5]);
 	rezult=ou_write(dev_mmk, channel, 1, 8, mass);
@@ -669,6 +674,8 @@ UN char fl_str=0,adr_BUP;
 				   return -1;
 				  } //ERROR
 				  for (i=0;i<2;i++) BUP_r[N_BUP][i]=msg_oc.rd_r.uim.dt[i];
+				  printf("\nПринят ответ от БУП%d:  ",N_BUP);
+				  for(i=0;i<msg_oc.rd_r.cnt;i++) printf("0x%x ", msg_oc.rd_r.uim.dt[i]);	printf("\n");
 				/*  //if (BUP_r[N_BUP][1]!=BUP_r_prev[N_BUP][1])
 				  {
 					printf("\ndata for BUP%d = %x %x",N_BUP,BUP_w[N_BUP][0],BUP_w[N_BUP][1]);
