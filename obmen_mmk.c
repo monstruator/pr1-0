@@ -60,7 +60,7 @@ unsigned cvs10_r_bkp[10]={0xc4, 0xc0, 0xc8, 0xc0, 0xcc, 0xc0, 0xd0, 0xc0};
 
 unsigned char BUP_r[3][2],BUP_r_prev[3][2]; //data from BUP
 unsigned char BUP_w[3][2]; //data for BUP
-
+int verbose=0; //вывод печати
 clear_CNL(int N_CNL);
 unsigned char k7_keeper(unsigned char n_rele);
 start_pcs_bu_and485();
@@ -74,18 +74,17 @@ int BUP_data(int N_BUP); //get BUP data
 int get_UM_data(); // SEND 7 PACKS and RECIEVE 4 PACKS
 //---------------------------------M A I N------------------------------------------
 main(int argc, char *argv[]) {
-
 //--- Разбор параметров
-while( (i=getopt(argc, argv, "I:C:O:") )!=-1)	{
+while( (i=getopt(argc, argv, "I:C:O:v") )!=-1)	{
 	switch(i){
 		case 'I' :	sscanf(optarg,"%d",&index); break;   //Index PCI (0)
 		case 'C' :	sscanf(optarg,"%d",&channel); break; //N канала
 		case 'O' :	sscanf(optarg,"%d",&n_ou); break;	 //N ОУ
+		case 'v' :  verbose++;         break;
 	}//switch
 }//while
 if(index>0) {printf("!!! Defect index_pci=%d (0)\n", index); exit(-1);}
 if(channel>2) {printf("!!! Defect channal=%d (0,1,2)\n", channel); exit(-1);}
-
 //=======================
 start_pcs_bu_and485();
 //======================= 
@@ -106,211 +105,166 @@ printf("proxyR=%d proxyERR=%d proxy_MODE=%d\n",
 	//printf("rezult ou_read = %d\n", rezult);
 	//for(i=0; i<12; i++) printf(" %x", dev_mmk->tx_B[i]);
 	//printf("\n in  - ");
-//	for(i=0; i<3; i++) printf(" %04x", dev_mmk->tx_B[i+4]);
+	//for(i=3; i<8; i++) printf(" %04x", dev_mmk->tx_B[i+4]);printf("\n");
 
 	//normirovanie uglov
 	for(i=0; i<3; i++) dev_mmk->tx_B[i+4]=dev_mmk->tx_B[i+4]&0x0fff;
 
-	//("\n");
 	//dev_mmk->tx_B[10]=dev_mmk->tx_B[10]&0x0380;
 	//printf("k7=%d    old=%d    ",dev_mmk->tx_B[10]&0x0380,set_pr1[10]&0x0380);
-  //prohod++;if (prohod==3) dev_mmk->tx_B[10]=0x0600;
-//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// Обработка
-			//NE RABOTAET TVK
-			mass[4]=mass[4]|0x0400;
-			if(dev_mmk->tx_B[7]&0x8000) mass[4]=mass[4]|0xf000;else mass[4]=mass[4]&0x0fff;
+	//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	// Обработка
+	//NE RABOTAET TVK
+	//mass[4]=|0x0400;
+	if(dev_mmk->tx_B[7]&0x8000) mass[4]=mass[4]|0xf000;else mass[4]=mass[4]&0x0fff;
 
-
-if (dev_mmk->tx_B[4]==0) dev_mmk->tx_B[4]=0x7c7;
-//-------------------------BUP---------------------------------
-//for(i=0;i<3;i++) mass[i]=dev_mmk->tx_B[i+4]; //возвращаем коды угла назад
-//	printf("------------------------------------%d   %d--------\n",dev_mmk->tx_B[0+4],(3983-dev_mmk->tx_B[0+4])-210);
-for(i=0;i<3;i++)  //!!!!!
-{
+	if (dev_mmk->tx_B[4]==0) dev_mmk->tx_B[4]=0x7c7;	
+	//-------------------------BUP---------------------------------
+	//for(i=0;i<3;i++) mass[i]=dev_mmk->tx_B[i+4]; //возвращаем коды угла назад
+	for(i=0;i<3;i++)  //!!!!!
+	{
+		if (i==0) dev_mmk->tx_B[0+4]=(3982-dev_mmk->tx_B[0+4]); //коррекция угла
+		if (i==1) {BUP_w[1][0]=(dev_mmk->tx_B[1+4]>>7)&0x1f; BUP_w[1][1]=(dev_mmk->tx_B[1+4]>>2)&0x1f;}
+		else {BUP_w[i][0]=(dev_mmk->tx_B[i+4]>>6)&0x3f; BUP_w[i][1]=(dev_mmk->tx_B[i+4])&0x3f;}
 	
-	if (i==0) dev_mmk->tx_B[0+4]=(3982-dev_mmk->tx_B[0+4]); //коррекция угла
-	if (i==1) {BUP_w[1][0]=(dev_mmk->tx_B[1+4]>>7)&0x1f; BUP_w[1][1]=(dev_mmk->tx_B[1+4]>>2)&0x1f;}
-	  	 else {BUP_w[i][0]=(dev_mmk->tx_B[i+4]>>6)&0x3f; BUP_w[i][1]=(dev_mmk->tx_B[i+4])&0x3f;}
-	//mass[i]=mass[i]&0x7fff;
-	
-	if (BUP_data(i)==0)
-	{	
-		if (i==1)	{mass[i]=BUP_r[i][0]&0x1f;mass[i]=mass[i]<<7;mass[i]+=(BUP_r[i][1]&0x1f)<<2;}
-		else 	    {mass[i]=BUP_r[i][0]&0x3f;mass[i]=mass[i]<<6;mass[i]+=BUP_r[i][1]&0x3f;}
+		if (BUP_data(i)==0)
+		{	
+			if (i==1)	{mass[i]=BUP_r[i][0]&0x1f;mass[i]=mass[i]<<7;mass[i]+=(BUP_r[i][1]&0x1f)<<2;}
+			else 	    {mass[i]=BUP_r[i][0]&0x3f;mass[i]=mass[i]<<6;mass[i]+=BUP_r[i][1]&0x3f;}
 
-		//уменьшение ошибки
-		if ((i==1)&&(mass_r[i]!=mass[i]))
-		{
-			mass_r[1]=mass[1];
-//			printf("mass=%d  mass_p=%d\n",mass[i],mass_w[i]);
-		//	if (( abs(dev_mmk->tx_B[i+4]-(mass[i]&0x0fff) )>2500)
-		//	   ||(abs(dev_mmk->tx_B[i+4]-(mass[i]&0x0fff) )<700) ) 
+			//уменьшение ошибки
+			if ((i==1)&&(mass_r[i]!=mass[i]))
 			{
-				//printf("owibka1=%d\n",dev_mmk->tx_B[i+4]-(mass[i]&0x0fff));			
-			if  (dev_mmk->tx_B[i+4]>(mass[i]&0x7fff)) 
-				mass[i]=dev_mmk->tx_B[i+4]+rand()/2000;
-			else
-				mass[i]=dev_mmk->tx_B[i+4]-rand()/2000;			
+				mass_r[1]=mass[1];
+				//printf("mass=%d  mass_p=%d\n",mass[i],mass_w[i]);
+				//	if (( abs(dev_mmk->tx_B[i+4]-(mass[i]&0x0fff) )>2500)
+				//	   ||(abs(dev_mmk->tx_B[i+4]-(mass[i]&0x0fff) )<700) ) 
+				{
+					//printf("owibka1=%d\n",dev_mmk->tx_B[i+4]-(mass[i]&0x0fff));			
+					if  (dev_mmk->tx_B[i+4]>(mass[i]&0x7fff))	mass[i]=dev_mmk->tx_B[i+4]+rand()/4000;
+					else										mass[i]=dev_mmk->tx_B[i+4]-rand()/4000;			
+				}
+				if (dev_mmk->tx_B[i+4]==0) 	{mass[i]=dev_mmk->tx_B[i+4];printf("mass=%d",mass[i]);}
+				mass_w[i]=mass[i];
+
+				//printf("mass_f_PR=%d  mass_ot_BUP=%d STEND=%d \n",mass[i],mass_r[i],dev_mmk->tx_B[5]);
+				//printf("owibka1=%d\n",dev_mmk->tx_B[1+4]-(mass[1]&0x0fff));						
 			}
+			else if(i!=0) mass[1]=mass_w[1];
 
-			if (dev_mmk->tx_B[i+4]==0) 	mass[i]=(dev_mmk->tx_B[i+4]-20)&0xfff;			
-			mass_w[1]=mass[1];
-
-//			printf("mass_f_PR=%d  mass_ot_BUP=%d STEND=%d \n",mass[i],mass_r[i],dev_mmk->tx_B[5]);
-//			printf("owibka1=%d\n",dev_mmk->tx_B[1+4]-(mass[1]&0x0fff));						
-		}
-		else if(i!=0) mass[1]=mass_w[1];
-
-		if ((i==2)&&(mass_r[i]!=mass[i]))
-		{
-			mass_r[2]=mass[2];
-			if (( abs(dev_mmk->tx_B[i+4]-(mass[i]&0x0fff) )>3)
-			   &&(abs(dev_mmk->tx_B[i+4]-(mass[i]&0x0fff) )<150) ) 
+			if ((i==2)&&(mass_r[i]!=mass[i]))
 			{
-			if  (dev_mmk->tx_B[i+4]>(mass[i]&0x7fff)) 
-				mass[i]=dev_mmk->tx_B[i+4]+rand()/14000;
-			else
-				mass[i]=dev_mmk->tx_B[i+4]-rand()/14000;			
+				mass_r[2]=mass[2];
+				if (( abs(dev_mmk->tx_B[i+4]-(mass[i]&0x0fff) )>3)
+				&&(abs(dev_mmk->tx_B[i+4]-(mass[i]&0x0fff) )<150) ) 
+				{
+					if  (dev_mmk->tx_B[i+4]>(mass[i]&0x7fff)) mass[i]=dev_mmk->tx_B[i+4]+rand()/14000;
+					else	mass[i]=dev_mmk->tx_B[i+4]-rand()/14000;
+				}
+				if ( (dev_mmk->tx_B[i+4]==0) && (mass[i]>4080) ) mass[i]=4095-rand()/14000;
+				mass_w[2]=mass[2];
 			}
-			if (dev_mmk->tx_B[6]==0) mass[2]=0;
-	        mass_w[2]=mass[2];
-//			printf("owibka2=%d\n",dev_mmk->tx_B[i+4]-(mass[i]&0x0fff));			
-		}
-		else if(i!=0) mass[2]=mass_w[2];
+			else if(i!=0) mass[2]=mass_w[2];
 
-//			if ((abs(dev_mmk->tx_B[4]-(mass[0]&0x0fff) )>3)
-//			   &&(abs(dev_mmk->tx_B[4]-(mass[0]&0x0fff) )<40) ) 
 			if  (abs(dev_mmk->tx_B[4]-(mass[0]&0x0fff))<40) 
 			{
-			if  (dev_mmk->tx_B[4]>(mass[0]&0x7fff)) 
-				mass[0]=dev_mmk->tx_B[4];//+rand()/20000;
-			else
-				mass[0]=dev_mmk->tx_B[4];//-rand()/20000;			
-
-			printf("%04x %04x\n",dev_mmk->tx_B[4],mass[0]);
-
+				if  (dev_mmk->tx_B[4]>(mass[0]&0x7fff)) mass[0]=dev_mmk->tx_B[4];//+rand()/20000;
+				else									mass[0]=dev_mmk->tx_B[4];//-rand()/20000;			
 			}
-			
-	//уменьшение ошибки
+		//уменьшение ошибки
+		}
+		else {mass[i]=mass[i]|0x8000;clear_CNL(8);}
 	}
-	else {mass[i]=mass[i]|0x8000;clear_CNL(8);}
-	
-}
-//-----------------------K7------------------------------------
-// Обработка команд для реле K7
-if ((set_pr1[10]&0x0380) != (dev_mmk->tx_B[10]&0x0380))
-{
-    switch((dev_mmk->tx_B[10]&0x0380)>>7)	
+	//-----------------------K7------------------------------------
+	// Обработка команд для реле K7
+	if ((set_pr1[10]&0x0380) != (dev_mmk->tx_B[10]&0x0380))
 	{
-		case 0 : i=0;break;
-		case 1 : i=4;break;
-		case 2 : i=2;break;
-	    case 3 : i=6;break;
-		case 4 : i=1;break;
-		case 5 : i=5;break;
-		case 6 : i=3;break; 
+		switch((dev_mmk->tx_B[10]&0x0380)>>7)	
+		{
+			case 0 : i=0;break;
+			case 1 : i=4;break;
+			case 2 : i=2;break;
+			case 3 : i=6;break;
+			case 4 : i=1;break;
+			case 5 : i=5;break;
+			case 6 : i=3;break; 
+		}
+		error_k7=k7_keeper(i); //printf("rele = %d  error = %x\n", i, error);
+		mass[5]=mass[5]&0xfe07;
 	}
-	error_k7=k7_keeper(i); //printf("rele = %d  error = %x\n", i, error);
-    mass[5]=mass[5]&0xfe07;
-
-    //  ошибочная работа БУ. Может выдавать ошибку от К6
-	//for(i=0;i<6;i++) if(error_k7&(1<<i)) mass[5]+=0x0100>>i;
-
-   // printf("error_k7=%x  \n",error_k7);
-}
-//----------------------K6------------------------------------
-if ( (set_pr1[10]&0xFC00) != (dev_mmk->tx_B[10]&0xFC00))
-{
-	dat=dev_mmk->tx_B[10]>>10;
-	dat=((dat&0x20)>>5) + ((dat&0x10)>>2) + (dat&8) + ((dat&4)<<2) + ((dat&2)<<4) + ((dat&1)<<1);
- 	error=k6_keeper(dat);
-//Обработка ошибки реле К6
-	  mass[5]=mass[5]&0x03ff;
-/* убрано из-за не правильно работающего БУ
-      if (error&1) mass[5]=mass[5]+0x8000; 
-      if (error&2) mass[5]=mass[5]+0x0400;//4000 
-      if (error&0x04) mass[5]=mass[5]+0x4000;//0800; 
-      if (error&0x08) mass[5]=mass[5]+0x2000; 
-      if (error&0x10) mass[5]=mass[5]+0x1000;//1000 
-      if (error&0x20) mass[5]=mass[5]+0x0800;//0400
-*/
-   // printf("rele K1-K6 = %x  error = %x \n", dat, error);
-}
-//---------------------RES90--------------------------------
-if ( (set_pr1[10]&0x0040) != (dev_mmk->tx_B[10]&0x0040))
-{
- 	er_r90=RES90(dev_mmk->tx_B[10]&0x0040);
-    mass[5]=(mass[5]&0xffbf)|(er_r90<<9);
-}
-//------------------------UM BSVCH--------------------------
-if ( (set_pr1[10]&0x0020) != (dev_mmk->tx_B[10]&0x0020))
-{
- 	error=um_bsv4(dev_mmk->tx_B[10]&0x0020);
-	
-	switch(error)
+	//----------------------K6------------------------------------
+	if ( (set_pr1[10]&0xFC00) != (dev_mmk->tx_B[10]&0xFC00))
 	{
-		case 0 : errorBSV4=4;break;
-		case 1 : errorBSV4=6;break;
-		case 2 : errorBSV4=0;break;
-		case 3 : errorBSV4=2;break;		
+		dat=dev_mmk->tx_B[10]>>10;
+		dat=((dat&0x20)>>5) + ((dat&0x10)>>2) + (dat&8) + ((dat&4)<<2) + ((dat&2)<<4) + ((dat&1)<<1);
+		error=k6_keeper(dat);
+		//Обработка ошибки реле К6
+		mass[5]=mass[5]&0x03ff;
 	}
-	//printf(" |error_bsv4=%d| ",error);
-    mass[5]=(mass[5]&0xfff8)|errorBSV4;
-}
-//--------------------------PRD LEVEL-------------------------
-if ((bsv4&6)==6) //если БЧСЧ включен и исправен (6)
-{
-	bsv4_request++;
-	if (bsv4_request==3) //разрядим запросы
+	//---------------------RES90--------------------------------
+	if ( (set_pr1[10]&0x0040) != (dev_mmk->tx_B[10]&0x0040))
 	{
-		mass[6]=BU_LVL();//printf("\nBU_LVL=%d\n",mass[6]);
-		bsv4_request=0;
+		er_r90=RES90(dev_mmk->tx_B[10]&0x0040);
+		mass[5]=(mass[5]&0xffbf)|(er_r90<<9);
 	}
-}
-bsv4=mass[5];
-//------------------------------UM1_0-------------------------
-if (   ((set_pr1[7]&0xFFC0) != (dev_mmk->tx_B[7]&0xFFC0)) 
-     | ((set_pr1[8]&0xFFFE) != (dev_mmk->tx_B[8]&0xFFFE)) 
-     |  (set_pr1[9] != dev_mmk->tx_B[9]))
-{    //проверка изменения командных слов
+	//------------------------UM BSVCH--------------------------	
+	if ( (set_pr1[10]&0x0020) != (dev_mmk->tx_B[10]&0x0020))
+	{
+		error=um_bsv4(dev_mmk->tx_B[10]&0x0020);
+		switch(error)
+		{
+			case 0 : errorBSV4=4;break;
+			case 1 : errorBSV4=6;break;
+			case 2 : errorBSV4=0;break;
+			case 3 : errorBSV4=2;break;		
+		}
+		mass[5]=(mass[5]&0xfff8)|errorBSV4;
+	}
+	//--------------------------PRD LEVEL-------------------------
+	if ((bsv4&6)==6) //если БЧСЧ включен и исправен (6)
+	{
+		bsv4_request++;
+		if (bsv4_request==3) //разрядим запросы
+		{
+			mass[6]=BU_LVL();//printf("\nBU_LVL=%d\n",mass[6]);
+			bsv4_request=0;
+		}
+	}
+	bsv4=mass[5];
+	//------------------------------UM1_0-------------------------
+	if (((set_pr1[7]&0xFFC0) != (dev_mmk->tx_B[7]&0xFFC0)) 
+      | ((set_pr1[8]&0xFFFE) != (dev_mmk->tx_B[8]&0xFFFE)) 
+      |  (set_pr1[9] != dev_mmk->tx_B[9]))
+	{    //проверка изменения командных слов
+		for(i=0;i<7;i++) for_UM10[i]=0;//обнуление слов    
+		//заполнение данных для отправки в УМ	
+		for(i=0;i<5;i++) for_UM10[0]+=((dev_mmk->tx_B[7]>>(14-i))&1)<<(5-i);//1-5
+		for_UM10[0]+=(dev_mmk->tx_B[7]>>15)&1;     //6
 
-	for(i=0;i<7;i++) for_UM10[i]=0;//обнуление слов    
-	 //заполнение данных для отправки в УМ	
-	for(i=0;i<5;i++) for_UM10[0]+=((dev_mmk->tx_B[7]>>(14-i))&1)<<(5-i);//1-5
-	for_UM10[0]+=(dev_mmk->tx_B[7]>>15)&1;     //6
+		for_UM10[1]+=((dev_mmk->tx_B[8]>>5)&1)<<5; //7
+		for(i=0;i<4;i++) for_UM10[1]+=((dev_mmk->tx_B[8]>>(12+i))&1)<<(4-i);//8-11
+		for_UM10[1]+=(dev_mmk->tx_B[8]>>4)&1; //12
 
-	for_UM10[1]+=((dev_mmk->tx_B[8]>>5)&1)<<5; //7
-	for(i=0;i<4;i++) for_UM10[1]+=((dev_mmk->tx_B[8]>>(12+i))&1)<<(4-i);//8-11
-	for_UM10[1]+=(dev_mmk->tx_B[8]>>4)&1; //12
+		for(i=0;i<6;i++) for_UM10[2]+=((dev_mmk->tx_B[8]>>(6+i))&1)<<(5-i);
 
-	for(i=0;i<6;i++) for_UM10[2]+=((dev_mmk->tx_B[8]>>(6+i))&1)<<(5-i);
+		for_UM10[3]+=((dev_mmk->tx_B[9]>>5)&1)<<5;//19		
+		for(i=0;i<4;i++) for_UM10[3]+=((dev_mmk->tx_B[9]>>(12+i))&1)<<(4-i);//20-23
+		for_UM10[3]+=(dev_mmk->tx_B[9]>>4)&1;//24
 
-	for_UM10[3]+=((dev_mmk->tx_B[9]>>5)&1)<<5;//19
-	for(i=0;i<4;i++) for_UM10[3]+=((dev_mmk->tx_B[9]>>(12+i))&1)<<(4-i);//20-23
-	for_UM10[3]+=(dev_mmk->tx_B[9]>>4)&1;//24
+		for(i=0;i<6;i++) for_UM10[4]+=((dev_mmk->tx_B[9]>>(6+i))&1)<<(5-i);
 
-	for(i=0;i<6;i++) for_UM10[4]+=((dev_mmk->tx_B[9]>>(6+i))&1)<<(5-i);
+		for_UM10[5]+=((dev_mmk->tx_B[9]>>3)&1)<<5;//31
+		for_UM10[5]+=((dev_mmk->tx_B[9]>>2)&1)<<4;//32
 
-	for_UM10[5]+=((dev_mmk->tx_B[9]>>3)&1)<<5;//31
-	for_UM10[5]+=((dev_mmk->tx_B[9]>>2)&1)<<4;//32
+		for_UM10[5]+=dev_mmk->tx_B[8]&0x0e; //33-35
+		for_UM10[5]+=(dev_mmk->tx_B[9]>>1)&1;     //36
 
-	for_UM10[5]+=dev_mmk->tx_B[8]&0x0e; //33-35
-	for_UM10[5]+=(dev_mmk->tx_B[9]>>1)&1;     //36
+		for_UM10[6]+=(dev_mmk->tx_B[9]&1)<<4;//38
+		for(i=0;i<4;i++) for_UM10[6]+=((dev_mmk->tx_B[7]>>(6+i))&1)<<(3-i);//39-42
 
-	for_UM10[6]+=(dev_mmk->tx_B[9]&1)<<4;//38
-	for(i=0;i<4;i++) for_UM10[6]+=((dev_mmk->tx_B[7]>>(6+i))&1)<<(3-i);//39-42
-
-	//printf("\n DATA for UM ");
-	//for(i=0;i<7;i++) printf(" %d.%x ",i+1,for_UM10[i]);printf("\n");
-	//if(get_UM_data()==-1) get_UM_data();
-
-	//USILITEL NE RABOTAET
-	//if (for_UM10[5]&0x20) {for_UM10[1]=for_UM10[1]|0x20;printf("1\n");}
-	//if (for_UM10[3]&0x20) {for_UM10[1]=for_UM10[1]|0x20;printf("2\n");}
-	//---------------------------------
-	//!!!!!mass[6]++;
-}
+		//printf("\n DATA for UM ");
+		//for(i=0;i<7;i++) printf(" %d.%x ",i+1,for_UM10[i]);printf("\n");
+	}
 	//if (UM_WORK<5) //
 	{
 		prohod++;
@@ -323,27 +277,27 @@ if (   ((set_pr1[7]&0xFFC0) != (dev_mmk->tx_B[7]&0xFFC0))
 	}
 	//else printf("\nUM not find. Stop requesting!\n");
 	//printf("%d ",prohod);
-//------------------------------------------------------------
-for(i=0; i<=11; i++) set_pr1[i]=dev_mmk->tx_B[i]; //запомним состояние упр слова
-//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-for(i=0; i<3; i++) mass[i]=mass[i]&0xfff;
-	printf("------------------------------------%d   --------\n",mass[0]);
-
-mass[0]=(3982-mass[0]); //коррекция положения антенны
-  // Передать 8 слов КК
-//    printf(" mass[5]=%x \n",mass[5]);
+	//------------------------------------------------------------
+	for(i=0; i<=11; i++) set_pr1[i]=dev_mmk->tx_B[i]; //запомним состояние упр слова
+	//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+	for(i=0; i<3; i++) mass[i]=mass[i]&0xfff;
+	//-----------------------Исправности 2016-------------------------------------
+	if (mass[4]&0x0200) mass[4]=mass[4]|0x0100; else mass[4]=mass[4]&0xfeff;
+	if (mass[4]&0x0800) mass[4]=mass[4]|0x0400; else mass[4]=mass[4]&0xfbff;
+	//------------------------------------------------------------
+	mass[0]=(3982-mass[0]); //коррекция положения антенны
+	// Передать 8 слов КК
 	rezult=ou_write(dev_mmk, channel, 1, 8, mass);
-//	printf("\n out - ");
- //for(i=0; i<3; i++) printf(" %04x",mass[i]);printf("\n");
-   
+	//	printf("\n out - ");
+	//  for(i=3; i<8; i++) printf(" %04x",mass[i]);printf("\n");
 	//printf("rezult ou_write = %d\n", rezult);
 	//delay(5);
 } // while 1
 
-CloseTx(dev_mmk);
-//printf("Процесс ts_mmk OK!!!\n");
+//CloseTx(dev_mmk);
 exit(0);
 } //*************************************************************************
+
 clear_CNL(int N_CNL)
 {
 	int rez1;
@@ -635,8 +589,6 @@ UN char fl_str=0,adr_BUP;
 	   //msg_ic.wr_s.uom.dt[0]=0xFF;
 	   //msg_ic.wr_s.uom.dt[1]=0xFF;
 		
-
-	
 	   //заполняем данные для БУПов
 	   //for(j=0; j<2 ;j++)   printf(" w%d=%x ",j,msg_ic.wr_s.uom.dt[j]);	    
 	   //printf("\nПередаем в канал 7  0x%x 0x%x", ar_msg[ii1][0],ar_msg[ii1][1]);
@@ -645,8 +597,6 @@ UN char fl_str=0,adr_BUP;
 	   msg_ic.wr_s.cnl=8;		
        msg_ic.wr_s.cnt=2;
 	   Send(pid_drv, &msg_ic, &msg_oc, sizeof(WR_CPCS_s),sizeof(WR_CPCS_r));
-
-	   //printf("\ndata for BUP%d = %x %x",N_BUP,msg_ic.wr_s.uom.dt[0],msg_ic.wr_s.uom.dt[1]);
 
 	   kkk=0;
 	   while(kkk < 3)
@@ -674,8 +624,11 @@ UN char fl_str=0,adr_BUP;
 				   return -1;
 				  } //ERROR
 				  for (i=0;i<2;i++) BUP_r[N_BUP][i]=msg_oc.rd_r.uim.dt[i];
-				  printf("\nПринят ответ от БУП%d:  ",N_BUP);
-				  for(i=0;i<msg_oc.rd_r.cnt;i++) printf("0x%x ", msg_oc.rd_r.uim.dt[i]);	printf("\n");
+				  if (verbose>2) 
+				  {
+					printf("\nПринят ответ от БУП%d:  ",N_BUP);
+					for(i=0;i<msg_oc.rd_r.cnt;i++) printf("0x%x ", msg_oc.rd_r.uim.dt[i]);	printf("\n");
+				  }
 				/*  //if (BUP_r[N_BUP][1]!=BUP_r_prev[N_BUP][1])
 				  {
 					printf("\ndata for BUP%d = %x %x",N_BUP,BUP_w[N_BUP][0],BUP_w[N_BUP][1]);
@@ -706,12 +659,6 @@ int get_UM_data()
 int ii,kkk,ii1,j,rez1,i1,i;
 UN char fl_str=0, word_num;
 
-//	   msg_ic.type=7; // RESET CHANEL
-//	   msg_ic.wr_s.cnl=8;		
-      // msg_ic.wr_s.cnt=2;
-
-//	   Send(pid_drv, &msg_ic, &msg_oc, sizeof(WR_CPCS_s),sizeof(WR_CPCS_r)); //send data to 7 chanel
-
 	for(ii1=0; ii1<7; ii1++)
 	  {//передаем запрос в канал
    	   pid_wrk=-1;
@@ -740,8 +687,6 @@ UN char fl_str=0, word_num;
 
 	           if(rez1!=-1&&!msg_oc.rd_r.status)     
 	             {//норма приема-передачи по каналу
-					//printf("kkk=%d\n",kkk);
-					//printf("\n UM 485");   for (i=0;i<2;i++) printf(" %x",msg_oc.rd_r.uim.dt[i]);
 					if (msg_oc.rd_r.cnt!=2) return -1;			//ERROR
 					for (i=0;i<2;i++) if (msg_oc.rd_r.uim.dt[i]<0xc0) {printf("\nError_UM_data %x\n",msg_oc.rd_r.uim.dt[i]);return -1;} //ERROR
 					if (!(msg_oc.rd_r.uim.dt[0]&2)) {printf("\nerror prev mess\n");return -1;}		//ERROR			
@@ -792,13 +737,7 @@ UN char fl_str=0, word_num;
 
 			//переворачиваем исправность ИВЭП
 			mass[3]=mass[3]^0x03f8;
-			//NE RABOTAET TVK
-//			mass[4]=mass[4]|0x0400;
-//			if(dev_mmk->tx_B[7]&0x8000) mass[4]=mass[4]|0xf000;else mass[4]=mass[4]&0x0fff;
-			
-            //printf("    mass[3]=%x  mass[4]=%x  \n",mass[3],mass[4]);
 			}
-	   //delay(1); //delay after send bite	  
 	  }
 	return 0;
 }
